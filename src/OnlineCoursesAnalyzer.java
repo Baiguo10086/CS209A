@@ -93,57 +93,187 @@ public class OnlineCoursesAnalyzer {
 
     //3
     public Map<String, List<List<String>>> getCourseListOfInstructor() {
-        Map<String, List<List<String>>> instructorCoursesMap = new HashMap<>();
+        Map<String, List<List<String>>> courseListByInstructor = new HashMap<>();
 
+        // Split the courses by instructor
+        Map<String, List<Course>> coursesByInstructor = new HashMap<>();
         for (Course course : courses) {
             String[] instructors = course.instructors.split(",");
             for (String instructor : instructors) {
                 instructor = instructor.trim();
-                if (instructor.isEmpty()) {
-                    continue;
-                }
-                List<List<String>> instructorCourses = instructorCoursesMap.getOrDefault(instructor,
-                    new ArrayList<>(2));
-
-                if (course.instructors.indexOf(',') == -1) {
-                    // independently responsible course
-                    List<String> independentlyResponsibleCourses =
-                        instructorCourses.size() == 0 ? new ArrayList<>()
-                            : instructorCourses.get(0);
-                    independentlyResponsibleCourses.add(course.title);
-                    Collections.sort(independentlyResponsibleCourses);
-                    instructorCourses.set(0, independentlyResponsibleCourses);
-                } else {
-                    // co-developed course
-                    List<String> coDevelopedCourses =
-                        instructorCourses.size() == 1 ? new ArrayList<>()
-                            : instructorCourses.get(1);
-                    coDevelopedCourses.add(course.title);
-                    Collections.sort(coDevelopedCourses);
-                    instructorCourses.add(coDevelopedCourses);
-                }
-
-                instructorCoursesMap.put(instructor, instructorCourses);
+                List<Course> coursesList = coursesByInstructor.getOrDefault(instructor,
+                    new ArrayList<>());
+                coursesList.add(course);
+                coursesByInstructor.put(instructor, coursesList);
             }
         }
 
-        return instructorCoursesMap;
+        // Sort the courses by title
+        for (List<Course> courses : coursesByInstructor.values()) {
+            courses.sort(Comparator.comparing(c -> c.title));
+        }
+
+        // Create the course list by instructor
+        for (String instructor : coursesByInstructor.keySet()) {
+            List<List<String>> courseList = new ArrayList<>();
+
+            List<Course> independentCourses = new ArrayList<>();
+            List<Course> coDevelopedCourses = new ArrayList<>();
+
+            // Split the courses by independent and co-developed
+            for (Course course : coursesByInstructor.get(instructor)) {
+                if (course.instructors.split(",").length == 1) {
+                    independentCourses.add(course);
+                } else {
+                    coDevelopedCourses.add(course);
+                }
+            }
+
+            // Sort the courses by title
+            independentCourses.sort(Comparator.comparing(c -> c.title));
+            coDevelopedCourses.sort(Comparator.comparing(c -> c.title));
+
+            // Add the course lists to the map
+            List<String> independentCourseTitles = new ArrayList<>();
+            for (Course course : independentCourses) {
+                if (!independentCourseTitles.contains(course.title)) {
+                    independentCourseTitles.add(course.title);
+                }
+            }
+            courseList.add(independentCourseTitles);
+
+            List<String> coDevelopedCourseTitles = new ArrayList<>();
+            for (Course course : coDevelopedCourses) {
+                if (!coDevelopedCourseTitles.contains(course.title)) {
+                    coDevelopedCourseTitles.add(course.title);
+                }
+            }
+            courseList.add(coDevelopedCourseTitles);
+
+            courseListByInstructor.put(instructor, courseList);
+        }
+
+        return courseListByInstructor;
     }
 
     //4
     public List<String> getCourses(int topK, String by) {
-        return null;
+        List<Course> sortedCourses = new ArrayList<>(courses);
+        switch (by) {
+            case "hours":
+                sortedCourses.sort(Comparator.comparing(Course::getTotalHours).reversed()
+                    .thenComparing(Course::getTitle));
+                break;
+            case "participants":
+                sortedCourses.sort(Comparator.comparing(Course::getParticipants).reversed()
+                    .thenComparing(Course::getTitle));
+                break;
+        }
+        List<String> topKCourses = new ArrayList<>();
+        int j = 0;
+        for (int i = 0; i < topK; j++) {
+            String title = sortedCourses.get(j).getTitle();
+            if (!topKCourses.contains(title)) {
+                i++;
+                topKCourses.add(title);
+            }
+        }
+        return topKCourses;
     }
 
     //5
     public List<String> searchCourses(String courseSubject, double percentAudited,
         double totalCourseHours) {
-        return null;
+        // Create an empty list to hold the results
+        List<String> results = new ArrayList<>();
+        List<Course> All_Courses = new ArrayList<>(courses);
+
+        // Convert the courseSubject to lowercase for case-insensitive matching
+        courseSubject = courseSubject.toLowerCase();
+
+        // Iterate over all courses to find matches
+        for (Course course : All_Courses) {
+            // Check if the course subject matches the given criteria
+            if (course.getSubject().toLowerCase().contains(courseSubject)) {
+                // Check if the percent audited and total course hours meet the given criteria
+                if (course.getPercentAudited() >= percentAudited
+                    && course.getTotalHours() <= totalCourseHours) {
+                    // Add the course title to the results if it meets all the criteria
+                    String courseTitle = course.getTitle();
+                    if (!results.contains(courseTitle)) {
+                        results.add(courseTitle);
+                    }
+                }
+            }
+        }
+
+        // Sort the results alphabetically
+        Collections.sort(results);
+
+        // Return the sorted list of course titles
+        return results;
     }
 
     //6
     public List<String> recommendCourses(int age, int gender, int isBachelorOrHigher) {
-        return null;
+        List<Course> All_courses = new ArrayList<>(courses); // assume this method retrieves the list of available courses
+
+        Map<String, List<Course>> course_unique = new HashMap<>();
+        for (Course course : All_courses) {
+            String number = course.number.trim();
+            List<Course> coursesList = course_unique.getOrDefault(number,
+                new ArrayList<>());
+            coursesList.add(course);
+            course_unique.put(number, coursesList);
+        }
+        List<Course> courseByNumber = new ArrayList<>();
+        for (List<Course> course : course_unique.values()) {
+            course.sort(Comparator.comparing(c -> c.launchDate));
+            if (course.size() >= 2) {
+                double averageMedianAge = 0;
+                double averagePercentMale = 0;
+                double averagePercentDegree = 0;
+                for (Course c : course) {
+                    averagePercentDegree += c.getPercentDegree();
+                    averageMedianAge += c.getMedianAge();
+                    averagePercentMale += c.getPercentMale();
+                }
+                averagePercentDegree /= course.size();
+                averageMedianAge /= course.size();
+                averagePercentMale /= course.size();
+                course.get(course.size() - 1).medianAge = averageMedianAge;
+                course.get(course.size() - 1).percentDegree = averagePercentDegree;
+                course.get(course.size() - 1).percentMale = averagePercentMale;
+            }
+            courseByNumber.add(course.get(course.size() - 1));
+        }
+        List<Course> tmp = new ArrayList<>();
+        for (Course c : courseByNumber) {
+            c.medianAge = Math.pow(age - c.medianAge, 2)
+                + Math.pow(gender * 100.0 - c.percentMale, 2)
+                + Math.pow(isBachelorOrHigher * 100.0 - c.percentDegree, 2);
+            tmp.add(c);
+        }
+        courseByNumber.sort(Comparator.comparing(
+            c -> (Math.pow(age - c.medianAge, 2)
+                + Math.pow(gender * 100.0 - c.percentMale, 2)
+                + Math.pow(isBachelorOrHigher * 100.0 - c.percentDegree, 2)
+            )));
+        List<Course> tmp2 = tmp.stream()
+            .sorted(Comparator.comparing(Course::getMedianAge).thenComparing(Course::getTitle))
+            .toList();
+        List<String> res = new ArrayList<>();
+
+        for (int i = 0; i < tmp2.size(); i++)
+        {
+            if (res.size()>=10) break;
+            if (!res.contains(tmp2.get(i).title)){
+                res.add(tmp2.get(i).title);
+            }
+
+        }
+        System.out.println(res);
+        return res;
     }
 
 }
@@ -224,5 +354,97 @@ class Course {
         this.percentMale = percentMale;
         this.percentFemale = percentFemale;
         this.percentDegree = percentDegree;
+    }
+
+    public String getTitle() {
+        return title;
+    }
+
+    public int getParticipants() {
+        return participants;
+    }
+
+    public double getTotalHours() {
+        return totalHours;
+    }
+
+    public double getPercentAudited() {
+        return percentAudited;
+    }
+
+    public String getSubject() {
+        return subject;
+    }
+
+    public String getInstitution() {
+        return institution;
+    }
+
+    public String getNumber() {
+        return number;
+    }
+
+    public Date getLaunchDate() {
+        return launchDate;
+    }
+
+    public String getInstructors() {
+        return instructors;
+    }
+
+    public int getYear() {
+        return year;
+    }
+
+    public int getHonorCode() {
+        return honorCode;
+    }
+
+    public int getAudited() {
+        return audited;
+    }
+
+    public int getCertified() {
+        return certified;
+    }
+
+    public double getPercentCertified() {
+        return percentCertified;
+    }
+
+    public double getPercentCertified50() {
+        return percentCertified50;
+    }
+
+    public double getPercentVideo() {
+        return percentVideo;
+    }
+
+    public double getPercentForum() {
+        return percentForum;
+    }
+
+    public double getGradeHigherZero() {
+        return gradeHigherZero;
+    }
+
+    public double getMedianHoursCertification() {
+        return medianHoursCertification;
+    }
+
+    public double getMedianAge() {
+        return medianAge;
+    }
+
+    public double getPercentMale() {
+        return percentMale;
+    }
+
+    public double getPercentFemale() {
+        return percentFemale;
+    }
+
+    public double getPercentDegree() {
+        return percentDegree;
     }
 }
